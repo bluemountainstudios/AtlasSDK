@@ -5,39 +5,23 @@ import FoundationNetworking
 import Testing
 @testable import AtlasSDK
 
-@Suite("AtlasSDK")
+@Suite("AtlasSDK", .serialized)
 struct AtlasSDKTests {
     @Test("registerForNotifications fails when configure was not called")
     func registerFailsWithoutConfigure() async throws {
-        let network = MockNetworkClient()
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("abc")),
-            platformProvider: MockPlatformProvider(platform: "ios")
-        )
-
-        sdk.logIn(userID: "user_1")
+        let sdk = AtlasSDK.shared
+        await sdk.resetForTesting()
+        await sdk.logIn(userID: "user_1")
 
         await #expect(throws: AtlasSDKError.notConfigured) {
             try await sdk.registerForNotifications()
         }
-        #expect(network.requests.isEmpty)
     }
 
     @Test("registerForNotifications fails when logIn was not called")
     func registerFailsWithoutLogin() async throws {
         let network = MockNetworkClient()
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("abc")),
-            platformProvider: MockPlatformProvider(platform: "ios")
-        )
-
-        sdk.configure(apiKey: "atlas_pub_key")
+        let sdk = await configuredSDK(network: network)
 
         await #expect(throws: AtlasSDKError.notLoggedIn) {
             try await sdk.registerForNotifications()
@@ -48,16 +32,11 @@ struct AtlasSDKTests {
     @Test("registerForNotifications fails when APNS permission is denied")
     func registerFailsPermissionDenied() async throws {
         let network = MockNetworkClient()
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(false)),
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("abc")),
-            platformProvider: MockPlatformProvider(platform: "ios")
+        let sdk = await configuredSDK(
+            network: network,
+            permissionRequester: MockPermissionRequester(result: .success(false))
         )
-
-        sdk.configure(apiKey: "atlas_pub_key")
-        sdk.logIn(userID: "user_1")
+        await sdk.logIn(userID: "user_1")
 
         await #expect(throws: AtlasSDKError.permissionDenied) {
             try await sdk.registerForNotifications()
@@ -68,16 +47,11 @@ struct AtlasSDKTests {
     @Test("registerForNotifications fails when device token is missing")
     func registerFailsMissingDeviceToken() async throws {
         let network = MockNetworkClient()
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: MockDeviceTokenProvider(result: .failure(AtlasSDKError.missingDeviceToken)),
-            platformProvider: MockPlatformProvider(platform: "ios")
+        let sdk = await configuredSDK(
+            network: network,
+            deviceTokenProvider: MockDeviceTokenProvider(result: .failure(AtlasSDKError.missingDeviceToken))
         )
-
-        sdk.configure(apiKey: "atlas_pub_key")
-        sdk.logIn(userID: "user_1")
+        await sdk.logIn(userID: "user_1")
 
         await #expect(throws: AtlasSDKError.missingDeviceToken) {
             try await sdk.registerForNotifications()
@@ -93,16 +67,12 @@ struct AtlasSDKTests {
             HTTPURLResponse(url: URL(string: "https://example.supabase.co")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         ))
 
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(true)),
+        let sdk = await configuredSDK(
+            network: network,
             deviceTokenProvider: MockDeviceTokenProvider(result: .success("device_token_123")),
             platformProvider: MockPlatformProvider(platform: "macos")
         )
-
-        sdk.configure(apiKey: "atlas_pub_key")
-        sdk.logIn(userID: "user_123")
+        await sdk.logIn(userID: "user_123")
 
         try await sdk.registerForNotifications()
 
@@ -130,15 +100,11 @@ struct AtlasSDKTests {
             HTTPURLResponse(url: URL(string: "https://example.supabase.co")!, statusCode: 401, httpVersion: nil, headerFields: nil)!
         ))
 
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token")),
-            platformProvider: MockPlatformProvider(platform: "ios")
+        let sdk = await configuredSDK(
+            network: network,
+            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token"))
         )
-        sdk.configure(apiKey: "atlas_pub_key")
-        sdk.logIn(userID: "user_123")
+        await sdk.logIn(userID: "user_123")
 
         do {
             try await sdk.registerForNotifications()
@@ -156,15 +122,11 @@ struct AtlasSDKTests {
         let network = MockNetworkClient()
         network.nextResult = .success((Data(), URLResponse()))
 
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token")),
-            platformProvider: MockPlatformProvider(platform: "ios")
+        let sdk = await configuredSDK(
+            network: network,
+            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token"))
         )
-        sdk.configure(apiKey: "atlas_pub_key")
-        sdk.logIn(userID: "user_123")
+        await sdk.logIn(userID: "user_123")
 
         await #expect(throws: AtlasSDKError.invalidResponse) {
             try await sdk.registerForNotifications()
@@ -173,28 +135,44 @@ struct AtlasSDKTests {
 
     @Test("configure and logIn updates values used by subsequent requests")
     func configureAndLoginOverwriteValues() async throws {
-        let network = MockNetworkClient()
-        network.nextResult = .success((
+        let firstNetwork = MockNetworkClient()
+        firstNetwork.nextResult = .success((
             Data("{\"ok\":true}".utf8),
             HTTPURLResponse(url: URL(string: "https://example.supabase.co")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         ))
 
-        let sdk = AtlasSDK(
+        let secondNetwork = MockNetworkClient()
+        secondNetwork.nextResult = .success((
+            Data("{\"ok\":true}".utf8),
+            HTTPURLResponse(url: URL(string: "https://example.supabase.co")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        ))
+
+        let sdk = AtlasSDK.shared
+        await sdk.resetForTesting()
+        await sdk.configure(
             configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
+            apiKey: "old_key",
+            networkClient: firstNetwork,
             permissionRequester: MockPermissionRequester(result: .success(true)),
             deviceTokenProvider: MockDeviceTokenProvider(result: .success("token")),
             platformProvider: MockPlatformProvider(platform: "ios")
         )
+        await sdk.logIn(userID: "old_user")
 
-        sdk.configure(apiKey: "old_key")
-        sdk.logIn(userID: "old_user")
-        sdk.configure(apiKey: "new_key")
-        sdk.logIn(userID: "new_user")
+        await sdk.configure(
+            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
+            apiKey: "new_key",
+            networkClient: secondNetwork,
+            permissionRequester: MockPermissionRequester(result: .success(true)),
+            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token")),
+            platformProvider: MockPlatformProvider(platform: "ios")
+        )
+        await sdk.logIn(userID: "new_user")
 
         try await sdk.registerForNotifications()
 
-        let request = try #require(network.requests.first)
+        #expect(firstNetwork.requests.isEmpty)
+        let request = try #require(secondNetwork.requests.first)
         let bodyData = try #require(request.httpBody)
         let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
         let payload = try #require(json)
@@ -221,15 +199,11 @@ struct AtlasSDKTests {
         let tokenProvider = MockAwaitingDeviceTokenProvider()
         let registrar = MockRemoteNotificationRegistrar()
 
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: tokenProvider,
-            platformProvider: MockPlatformProvider(platform: "ios")
+        let sdk = await configuredSDK(
+            network: network,
+            deviceTokenProvider: tokenProvider
         )
-        sdk.configure(apiKey: "atlas_pub_key")
-        sdk.logIn(userID: "user_123")
+        await sdk.logIn(userID: "user_123")
 
         try await sdk.registerForNotificationsAutomatically(timeout: 1, remoteRegistrar: registrar)
 
@@ -248,15 +222,11 @@ struct AtlasSDKTests {
         let tokenProvider = MockAwaitingDeviceTokenProvider(waitResult: .failure(AtlasSDKError.deviceTokenTimeout))
         let registrar = MockRemoteNotificationRegistrar()
 
-        let sdk = AtlasSDK(
-            configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
-            networkClient: network,
-            permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: tokenProvider,
-            platformProvider: MockPlatformProvider(platform: "ios")
+        let sdk = await configuredSDK(
+            network: network,
+            deviceTokenProvider: tokenProvider
         )
-        sdk.configure(apiKey: "atlas_pub_key")
-        sdk.logIn(userID: "user_123")
+        await sdk.logIn(userID: "user_123")
 
         await #expect(throws: AtlasSDKError.deviceTokenTimeout) {
             try await sdk.registerForNotificationsAutomatically(timeout: 0.01, remoteRegistrar: registrar)
@@ -298,6 +268,25 @@ struct AtlasSDKTests {
         #expect(token == "from_callback")
         store.clear()
     }
+}
+
+private func configuredSDK(
+    network: MockNetworkClient,
+    permissionRequester: MockPermissionRequester = MockPermissionRequester(result: .success(true)),
+    deviceTokenProvider: DeviceTokenProviding = MockDeviceTokenProvider(result: .success("abc")),
+    platformProvider: AtlasPlatformProviding = MockPlatformProvider(platform: "ios")
+) async -> AtlasSDK {
+    let sdk = AtlasSDK.shared
+    await sdk.resetForTesting()
+    await sdk.configure(
+        configuration: .init(baseURL: URL(string: "https://example.supabase.co")!),
+        apiKey: "atlas_pub_key",
+        networkClient: network,
+        permissionRequester: permissionRequester,
+        deviceTokenProvider: deviceTokenProvider,
+        platformProvider: platformProvider
+    )
+    return sdk
 }
 
 private final class MockNetworkClient: AtlasNetworkClient, @unchecked Sendable {
