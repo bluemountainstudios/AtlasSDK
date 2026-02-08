@@ -5,6 +5,7 @@ import FoundationNetworking
 
 public actor AtlasSDK {
     public static let shared = AtlasSDK()
+    public nonisolated(unsafe) static var debugLoggingEnabled: Bool = false
 
     private var configuration: AtlasSDKConfiguration?
     private var networkClient: AtlasNetworkClient = URLSessionNetworkClient()
@@ -31,39 +32,45 @@ public actor AtlasSDK {
         )
     }
 
-    public func setDeviceAPNSToken(_ tokenData: Data) {
-        AtlasDeviceTokenStore.shared.setDeviceToken(tokenData)
+    public func setDeviceAPNSToken(_ tokenData: Data) async throws {
+        let tokenString = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
+        try await setDeviceAPNSToken(tokenString)
     }
 
-    public func setDeviceAPNSToken(_ token: String) {
+    public func setDeviceAPNSToken(_ token: String) async throws {
         AtlasDeviceTokenStore.shared.setDeviceToken(token)
+        let auth = try validatedAuth()
+        debugLog("Uploading APNS token for user \(auth.userID).")
+        try await registerDeviceToken(token, auth: auth)
     }
 
     public func logIn(userID: String) {
         self.userID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    public func registerForNotifications() async throws {
-        try await registerForNotifications(
+    public func requestNotificationPermissions() async throws {
+        try await requestNotificationPermissions(
             timeout: 30,
             remoteRegistrar: SystemRemoteNotificationRegistrar()
         )
     }
 
-    func registerForNotifications(
+    func requestNotificationPermissions(
         timeout: TimeInterval,
         remoteRegistrar: RemoteNotificationRegistering
     ) async throws {
-        let auth = try validatedAuth()
+        _ = try validatedAuth()
 
+        debugLog("Requesting notification permission.")
         let granted = try await permissionRequester.requestAuthorization()
         guard granted else {
             throw AtlasSDKError.permissionDenied
         }
+        debugLog("Notification permission granted.")
 
         try await remoteRegistrar.registerForRemoteNotifications()
-        let deviceToken = try await awaitedDeviceToken(timeout: timeout)
-        try await registerDeviceToken(deviceToken, auth: auth)
+        _ = try await awaitedDeviceToken(timeout: timeout)
+        debugLog("Remote notification registration requested.")
     }
 
     private func awaitedDeviceToken(timeout: TimeInterval) async throws -> String {
@@ -98,6 +105,7 @@ public actor AtlasSDK {
             .appendingPathComponent("functions")
             .appendingPathComponent("v1")
             .appendingPathComponent("register-device")
+        debugLog("POST \(endpoint.absoluteString)")
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
@@ -111,16 +119,29 @@ public actor AtlasSDK {
         )
         request.httpBody = try JSONEncoder().encode(payload)
 
-        let (data, response) = try await networkClient.send(request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await networkClient.send(request)
+        } catch {
+            debugLog("Network request failed: \(error)")
+            throw error
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AtlasSDKError.invalidResponse
         }
+        let responseBody = String(data: data, encoding: .utf8) ?? ""
+        debugLog("Response status: \(httpResponse.statusCode), body: \(responseBody)")
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw AtlasSDKError.requestFailed(statusCode: httpResponse.statusCode, body: body)
+            throw AtlasSDKError.requestFailed(statusCode: httpResponse.statusCode, body: responseBody)
         }
+    }
+
+    private nonisolated func debugLog(_ message: String) {
+        guard AtlasSDK.debugLoggingEnabled else { return }
+        print("[AtlasSDK] \(message)")
     }
 }
 
