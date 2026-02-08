@@ -4,7 +4,7 @@ import FoundationNetworking
 #endif
 
 public actor AtlasSDK {
-    public static let shared = AtlasSDK()
+    static let shared = AtlasSDK()
 
     private var configuration: AtlasSDKConfiguration?
     private var networkClient: AtlasNetworkClient = URLSessionNetworkClient()
@@ -31,25 +31,24 @@ public actor AtlasSDK {
         )
     }
 
-    public func logIn(userID: String) {
+    public static func logIn(userID: String) async {
+        await shared.logIn(userID: userID)
+    }
+
+    public static func registerForNotifications() async throws {
+        try await shared.registerForNotifications(
+            timeout: 30,
+            remoteRegistrar: SystemRemoteNotificationRegistrar()
+        )
+    }
+
+    func logIn(userID: String) {
         self.userID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    public func registerForNotifications() async throws {
-        let auth = try validatedAuth()
-
-        let granted = try await permissionRequester.requestAuthorization()
-        guard granted else {
-            throw AtlasSDKError.permissionDenied
-        }
-
-        let deviceToken = try deviceTokenProvider.fetchDeviceToken()
-        try await registerDeviceToken(deviceToken, auth: auth)
-    }
-
-    public func registerForNotificationsAutomatically(
-        timeout: TimeInterval = 30,
-        remoteRegistrar: RemoteNotificationRegistering = SystemRemoteNotificationRegistrar()
+    func registerForNotifications(
+        timeout: TimeInterval,
+        remoteRegistrar: RemoteNotificationRegistering
     ) async throws {
         let auth = try validatedAuth()
 
@@ -61,18 +60,6 @@ public actor AtlasSDK {
         try await remoteRegistrar.registerForRemoteNotifications()
         let deviceToken = try await awaitedDeviceToken(timeout: timeout)
         try await registerDeviceToken(deviceToken, auth: auth)
-    }
-
-    public static func didRegisterForRemoteNotifications(deviceToken: Data) {
-        AtlasDeviceTokenStore.shared.setDeviceToken(deviceToken)
-    }
-
-    public static func didRegisterForRemoteNotifications(deviceTokenHex: String) {
-        AtlasDeviceTokenStore.shared.setDeviceToken(deviceTokenHex)
-    }
-
-    public static func didFailToRegisterForRemoteNotifications(error: Error) {
-        _ = error
     }
 
     private func awaitedDeviceToken(timeout: TimeInterval) async throws -> String {
