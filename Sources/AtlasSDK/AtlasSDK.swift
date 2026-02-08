@@ -4,7 +4,7 @@ import FoundationNetworking
 #endif
 
 public actor AtlasSDK {
-    static let shared = AtlasSDK()
+    public static let shared = AtlasSDK()
 
     private var configuration: AtlasSDKConfiguration?
     private var networkClient: AtlasNetworkClient = URLSessionNetworkClient()
