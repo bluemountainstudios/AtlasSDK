@@ -11,13 +11,12 @@ Add this package as a dependency and import `AtlasSDK`.
 ```swift
 import AtlasSDK
 
-let sdk = AtlasSDK(
-    configuration: .init(baseURL: URL(string: "https://your-project-ref.supabase.co")!)
+await AtlasSDK.configure(
+    configuration: .init(baseURL: URL(string: "https://your-project-ref.supabase.co")!),
+    apiKey: "atlas_pub_..."
 )
-
-sdk.configure(apiKey: "atlas_pub_...")
-sdk.logIn(userID: "user-123")
-try await sdk.registerForNotifications()
+await AtlasSDK.shared.logIn(userID: "user-123")
+try await AtlasSDK.shared.registerForNotifications()
 ```
 
 ## Automatic APNS registration flow
@@ -25,7 +24,7 @@ try await sdk.registerForNotifications()
 You can have the SDK request notification authorization, trigger system remote-notification registration, wait for the APNS callback token, and register that token with Atlas in one call:
 
 ```swift
-try await sdk.registerForNotificationsAutomatically()
+try await AtlasSDK.shared.registerForNotificationsAutomatically()
 ```
 
 ## App delegate / callback wiring

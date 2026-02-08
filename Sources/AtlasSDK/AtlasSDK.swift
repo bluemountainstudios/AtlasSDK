@@ -3,32 +3,32 @@ import Foundation
 import FoundationNetworking
 #endif
 
-public final class AtlasSDK {
-    private let configuration: AtlasSDKConfiguration
-    private let networkClient: AtlasNetworkClient
-    private let permissionRequester: NotificationPermissionRequesting
-    private let deviceTokenProvider: DeviceTokenProviding
-    private let platformProvider: AtlasPlatformProviding
+public actor AtlasSDK {
+    public static let shared = AtlasSDK()
+
+    private var configuration: AtlasSDKConfiguration?
+    private var networkClient: AtlasNetworkClient = URLSessionNetworkClient()
+    private var permissionRequester: NotificationPermissionRequesting = UserNotificationPermissionRequester()
+    private var deviceTokenProvider: DeviceTokenProviding = AtlasDeviceTokenStore.shared
+    private var platformProvider: AtlasPlatformProviding = SystemPlatformProvider()
 
     private var apiKey: String?
     private var userID: String?
 
-    public init(
-        configuration: AtlasSDKConfiguration,
-        networkClient: AtlasNetworkClient = URLSessionNetworkClient(),
-        permissionRequester: NotificationPermissionRequesting = UserNotificationPermissionRequester(),
-        deviceTokenProvider: DeviceTokenProviding = AtlasDeviceTokenStore.shared,
-        platformProvider: AtlasPlatformProviding = SystemPlatformProvider()
-    ) {
-        self.configuration = configuration
-        self.networkClient = networkClient
-        self.permissionRequester = permissionRequester
-        self.deviceTokenProvider = deviceTokenProvider
-        self.platformProvider = platformProvider
-    }
+    private init() {}
 
-    public func configure(apiKey: String) {
-        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    public static func configure(
+        configuration: AtlasSDKConfiguration,
+        apiKey: String
+    ) async {
+        await shared.configure(
+            configuration: configuration,
+            apiKey: apiKey,
+            networkClient: URLSessionNetworkClient(),
+            permissionRequester: UserNotificationPermissionRequester(),
+            deviceTokenProvider: AtlasDeviceTokenStore.shared,
+            platformProvider: SystemPlatformProvider()
+        )
     }
 
     public func logIn(userID: String) {
@@ -82,7 +82,11 @@ public final class AtlasSDK {
         return try deviceTokenProvider.fetchDeviceToken()
     }
 
-    private func validatedAuth() throws -> (apiKey: String, userID: String) {
+    private func validatedAuth() throws -> (configuration: AtlasSDKConfiguration, apiKey: String, userID: String) {
+        guard let configuration else {
+            throw AtlasSDKError.notConfigured
+        }
+
         guard let apiKey, !apiKey.isEmpty else {
             throw AtlasSDKError.notConfigured
         }
@@ -91,12 +95,15 @@ public final class AtlasSDK {
             throw AtlasSDKError.notLoggedIn
         }
 
-        return (apiKey, userID)
+        return (configuration, apiKey, userID)
     }
 
-    private func registerDeviceToken(_ deviceToken: String, auth: (apiKey: String, userID: String)) async throws {
-        
-        let endpoint = configuration.baseURL
+    private func registerDeviceToken(
+        _ deviceToken: String,
+        auth: (configuration: AtlasSDKConfiguration, apiKey: String, userID: String)
+    ) async throws {
+
+        let endpoint = auth.configuration.baseURL
             .appendingPathComponent("functions")
             .appendingPathComponent("v1")
             .appendingPathComponent("register-device")
@@ -123,6 +130,34 @@ public final class AtlasSDK {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw AtlasSDKError.requestFailed(statusCode: httpResponse.statusCode, body: body)
         }
+    }
+}
+
+extension AtlasSDK {
+    internal func configure(
+        configuration: AtlasSDKConfiguration,
+        apiKey: String,
+        networkClient: AtlasNetworkClient,
+        permissionRequester: NotificationPermissionRequesting,
+        deviceTokenProvider: DeviceTokenProviding,
+        platformProvider: AtlasPlatformProviding
+    ) {
+        self.configuration = configuration
+        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.networkClient = networkClient
+        self.permissionRequester = permissionRequester
+        self.deviceTokenProvider = deviceTokenProvider
+        self.platformProvider = platformProvider
+    }
+
+    internal func resetForTesting() {
+        configuration = nil
+        networkClient = URLSessionNetworkClient()
+        permissionRequester = UserNotificationPermissionRequester()
+        deviceTokenProvider = AtlasDeviceTokenStore.shared
+        platformProvider = SystemPlatformProvider()
+        apiKey = nil
+        userID = nil
     }
 }
 
