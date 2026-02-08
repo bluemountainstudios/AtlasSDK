@@ -1,20 +1,20 @@
 import Foundation
 
-public final class AtlasDeviceTokenStore: DeviceTokenProviding, @unchecked Sendable {
-    public static let shared = AtlasDeviceTokenStore()
+final class AtlasDeviceTokenStore: DeviceTokenProviding, @unchecked Sendable {
+    static let shared = AtlasDeviceTokenStore()
 
     private let lock = NSLock()
     private var token: String?
     private var waiters: [UUID: CheckedContinuation<String, Error>] = [:]
 
-    public init() {}
+    init() {}
 
-    public func setDeviceToken(_ tokenData: Data) {
+    func setDeviceToken(_ tokenData: Data) {
         let tokenString = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
         setDeviceToken(tokenString)
     }
 
-    public func setDeviceToken(_ token: String) {
+    func setDeviceToken(_ token: String) {
         var continuations: [CheckedContinuation<String, Error>] = []
         lock.lock()
         continuations = Array(waiters.values)
@@ -27,13 +27,13 @@ public final class AtlasDeviceTokenStore: DeviceTokenProviding, @unchecked Senda
         }
     }
 
-    public func clear() {
+    func clear() {
         lock.lock()
         defer { lock.unlock() }
         token = nil
     }
 
-    public func fetchDeviceToken() throws -> String {
+    func fetchDeviceToken() throws -> String {
         lock.lock()
         defer { lock.unlock() }
         guard let token, !token.isEmpty else {
@@ -42,7 +42,7 @@ public final class AtlasDeviceTokenStore: DeviceTokenProviding, @unchecked Senda
         return token
     }
 
-    public func waitForDeviceToken(timeout: TimeInterval = 30) async throws -> String {
+    func waitForDeviceToken(timeout: TimeInterval = 30) async throws -> String {
         do {
             return try fetchDeviceToken()
         } catch AtlasSDKError.missingDeviceToken {

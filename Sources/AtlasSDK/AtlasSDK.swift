@@ -31,6 +31,14 @@ public actor AtlasSDK {
         )
     }
 
+    public func setDeviceToken(_ tokenData: Data) {
+        AtlasDeviceTokenStore.shared.setDeviceToken(tokenData)
+    }
+
+    public func setDeviceToken(_ token: String) {
+        AtlasDeviceTokenStore.shared.setDeviceToken(token)
+    }
+
     public func logIn(userID: String) {
         self.userID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
