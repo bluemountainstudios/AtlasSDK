@@ -12,7 +12,7 @@ Add this package as a dependency and import `AtlasSDK`.
 import AtlasSDK
 
 let sdk = AtlasSDK(
-    configuration: .init(baseURL: URL(string: "https://ylbhvhpcrfqbeeixhiuv.supabase.co")!)
+    configuration: .init(baseURL: URL(string: "https://your-project-ref.supabase.co")!)
 )
 
 sdk.configure(apiKey: "atlas_pub_...")
