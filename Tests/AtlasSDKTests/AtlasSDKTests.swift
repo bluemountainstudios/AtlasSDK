@@ -14,7 +14,7 @@ struct AtlasSDKTests {
         await sdk.logIn(userID: "user_1")
 
         await #expect(throws: AtlasSDKError.notConfigured) {
-            try await sdk.registerForNotifications()
+            try await sdk.registerForNotifications(timeout: 1, remoteRegistrar: MockRemoteNotificationRegistrar())
         }
     }
 
@@ -24,7 +24,7 @@ struct AtlasSDKTests {
         let sdk = await configuredSDK(network: network)
 
         await #expect(throws: AtlasSDKError.notLoggedIn) {
-            try await sdk.registerForNotifications()
+            try await sdk.registerForNotifications(timeout: 1, remoteRegistrar: MockRemoteNotificationRegistrar())
         }
         #expect(network.requests.isEmpty)
     }
@@ -32,6 +32,7 @@ struct AtlasSDKTests {
     @Test("registerForNotifications fails when APNS permission is denied")
     func registerFailsPermissionDenied() async throws {
         let network = MockNetworkClient()
+        let registrar = MockRemoteNotificationRegistrar()
         let sdk = await configuredSDK(
             network: network,
             permissionRequester: MockPermissionRequester(result: .success(false))
@@ -39,23 +40,28 @@ struct AtlasSDKTests {
         await sdk.logIn(userID: "user_1")
 
         await #expect(throws: AtlasSDKError.permissionDenied) {
-            try await sdk.registerForNotifications()
+            try await sdk.registerForNotifications(timeout: 1, remoteRegistrar: registrar)
         }
+        #expect(registrar.callCount == 0)
         #expect(network.requests.isEmpty)
     }
 
-    @Test("registerForNotifications fails when device token is missing")
-    func registerFailsMissingDeviceToken() async throws {
+    @Test("registerForNotifications fails when awaited token times out")
+    func registerFailsWhenTokenTimeout() async throws {
         let network = MockNetworkClient()
+        let tokenProvider = MockAwaitingDeviceTokenProvider(waitResult: .failure(AtlasSDKError.deviceTokenTimeout))
+        let registrar = MockRemoteNotificationRegistrar()
         let sdk = await configuredSDK(
             network: network,
-            deviceTokenProvider: MockDeviceTokenProvider(result: .failure(AtlasSDKError.missingDeviceToken))
+            deviceTokenProvider: tokenProvider
         )
         await sdk.logIn(userID: "user_1")
 
-        await #expect(throws: AtlasSDKError.missingDeviceToken) {
-            try await sdk.registerForNotifications()
+        await #expect(throws: AtlasSDKError.deviceTokenTimeout) {
+            try await sdk.registerForNotifications(timeout: 0.01, remoteRegistrar: registrar)
         }
+        #expect(registrar.callCount == 1)
+        #expect(tokenProvider.waitCallCount == 1)
         #expect(network.requests.isEmpty)
     }
 
@@ -66,16 +72,20 @@ struct AtlasSDKTests {
             Data("{\"ok\":true}".utf8),
             HTTPURLResponse(url: URL(string: "https://example.supabase.co")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
         ))
+        let tokenProvider = MockAwaitingDeviceTokenProvider(waitResult: .success("device_token_123"))
+        let registrar = MockRemoteNotificationRegistrar()
 
         let sdk = await configuredSDK(
             network: network,
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("device_token_123")),
+            deviceTokenProvider: tokenProvider,
             platformProvider: MockPlatformProvider(platform: "macos")
         )
         await sdk.logIn(userID: "user_123")
 
-        try await sdk.registerForNotifications()
+        try await sdk.registerForNotifications(timeout: 1, remoteRegistrar: registrar)
 
+        #expect(registrar.callCount == 1)
+        #expect(tokenProvider.waitCallCount == 1)
         #expect(network.requests.count == 1)
         let request = try #require(network.requests.first)
         #expect(request.httpMethod == "POST")
@@ -102,12 +112,12 @@ struct AtlasSDKTests {
 
         let sdk = await configuredSDK(
             network: network,
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token"))
+            deviceTokenProvider: MockAwaitingDeviceTokenProvider(waitResult: .success("token"))
         )
         await sdk.logIn(userID: "user_123")
 
         do {
-            try await sdk.registerForNotifications()
+            try await sdk.registerForNotifications(timeout: 1, remoteRegistrar: MockRemoteNotificationRegistrar())
             Issue.record("Expected requestFailed but succeeded.")
         } catch let AtlasSDKError.requestFailed(statusCode, body) {
             #expect(statusCode == 401)
@@ -124,12 +134,12 @@ struct AtlasSDKTests {
 
         let sdk = await configuredSDK(
             network: network,
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token"))
+            deviceTokenProvider: MockAwaitingDeviceTokenProvider(waitResult: .success("token"))
         )
         await sdk.logIn(userID: "user_123")
 
         await #expect(throws: AtlasSDKError.invalidResponse) {
-            try await sdk.registerForNotifications()
+            try await sdk.registerForNotifications(timeout: 1, remoteRegistrar: MockRemoteNotificationRegistrar())
         }
     }
 
@@ -154,7 +164,7 @@ struct AtlasSDKTests {
             apiKey: "old_key",
             networkClient: firstNetwork,
             permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token")),
+            deviceTokenProvider: MockAwaitingDeviceTokenProvider(waitResult: .success("token")),
             platformProvider: MockPlatformProvider(platform: "ios")
         )
         await sdk.logIn(userID: "old_user")
@@ -164,12 +174,12 @@ struct AtlasSDKTests {
             apiKey: "new_key",
             networkClient: secondNetwork,
             permissionRequester: MockPermissionRequester(result: .success(true)),
-            deviceTokenProvider: MockDeviceTokenProvider(result: .success("token")),
+            deviceTokenProvider: MockAwaitingDeviceTokenProvider(waitResult: .success("token")),
             platformProvider: MockPlatformProvider(platform: "ios")
         )
         await sdk.logIn(userID: "new_user")
 
-        try await sdk.registerForNotifications()
+        try await sdk.registerForNotifications(timeout: 1, remoteRegistrar: MockRemoteNotificationRegistrar())
 
         #expect(firstNetwork.requests.isEmpty)
         let request = try #require(secondNetwork.requests.first)
@@ -181,88 +191,24 @@ struct AtlasSDKTests {
         #expect(payload["user_id"] as? String == "new_user")
     }
 
-    @Test("AtlasDeviceTokenStore converts Data token to lowercase hex")
-    func deviceTokenStoreHexConversion() throws {
-        let store = AtlasDeviceTokenStore()
-        store.setDeviceToken(Data([0x0A, 0xBC, 0x01]))
+    @Test("AtlasSDK.setDeviceAPNSToken(Data) stores lowercase hex token")
+    func sdkSetDeviceTokenData() async throws {
+        let store = AtlasDeviceTokenStore.shared
+        store.clear()
+        await AtlasSDK.shared.setDeviceAPNSToken(Data([0x0A, 0xBC, 0x01]))
         let token = try store.fetchDeviceToken()
         #expect(token == "0abc01")
-    }
-
-    @Test("registerForNotificationsAutomatically triggers remote registration and uses awaited token")
-    func automaticRegistrationSuccess() async throws {
-        let network = MockNetworkClient()
-        network.nextResult = .success((
-            Data("{\"ok\":true}".utf8),
-            HTTPURLResponse(url: URL(string: "https://example.supabase.co")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
-        ))
-        let tokenProvider = MockAwaitingDeviceTokenProvider()
-        let registrar = MockRemoteNotificationRegistrar()
-
-        let sdk = await configuredSDK(
-            network: network,
-            deviceTokenProvider: tokenProvider
-        )
-        await sdk.logIn(userID: "user_123")
-
-        try await sdk.registerForNotificationsAutomatically(timeout: 1, remoteRegistrar: registrar)
-
-        #expect(registrar.callCount == 1)
-        #expect(tokenProvider.waitCallCount == 1)
-        let request = try #require(network.requests.first)
-        let body = try #require(request.httpBody)
-        let json = try JSONSerialization.jsonObject(with: body) as? [String: Any]
-        let payload = try #require(json)
-        #expect(payload["device_token"] as? String == "awaited_token")
-    }
-
-    @Test("registerForNotificationsAutomatically fails when awaited token times out")
-    func automaticRegistrationTimeout() async throws {
-        let network = MockNetworkClient()
-        let tokenProvider = MockAwaitingDeviceTokenProvider(waitResult: .failure(AtlasSDKError.deviceTokenTimeout))
-        let registrar = MockRemoteNotificationRegistrar()
-
-        let sdk = await configuredSDK(
-            network: network,
-            deviceTokenProvider: tokenProvider
-        )
-        await sdk.logIn(userID: "user_123")
-
-        await #expect(throws: AtlasSDKError.deviceTokenTimeout) {
-            try await sdk.registerForNotificationsAutomatically(timeout: 0.01, remoteRegistrar: registrar)
-        }
-        #expect(registrar.callCount == 1)
-        #expect(network.requests.isEmpty)
-    }
-
-    @Test("AtlasSDK callback helper stores APNS token data")
-    func callbackStoresTokenData() throws {
-        let store = AtlasDeviceTokenStore.shared
-        store.clear()
-        AtlasSDK.didRegisterForRemoteNotifications(deviceToken: Data([0xAA, 0x10, 0xFF]))
-        let token = try store.fetchDeviceToken()
-        #expect(token == "aa10ff")
         store.clear()
     }
 
-    @Test("AtlasSDK callback helper stores APNS token hex")
-    func callbackStoresTokenHex() throws {
-        let store = AtlasDeviceTokenStore.shared
-        store.clear()
-        AtlasSDK.didRegisterForRemoteNotifications(deviceTokenHex: "abc123")
-        let token = try store.fetchDeviceToken()
-        #expect(token == "abc123")
-        store.clear()
-    }
-
-    @Test("AtlasDeviceTokenStore waitForDeviceToken resumes after callback sets token")
-    func deviceTokenStoreWaitsForCallback() async throws {
+    @Test("AtlasSDK.setDeviceAPNSToken(String) resumes waiters")
+    func sdkSetDeviceTokenStringResumesWaiters() async throws {
         let store = AtlasDeviceTokenStore.shared
         store.clear()
 
         async let awaited: String = store.waitForDeviceToken(timeout: 1)
         try await Task.sleep(nanoseconds: 50_000_000)
-        AtlasSDK.didRegisterForRemoteNotifications(deviceTokenHex: "from_callback")
+        await AtlasSDK.shared.setDeviceAPNSToken("from_callback")
 
         let token = try await awaited
         #expect(token == "from_callback")
@@ -273,7 +219,7 @@ struct AtlasSDKTests {
 private func configuredSDK(
     network: MockNetworkClient,
     permissionRequester: MockPermissionRequester = MockPermissionRequester(result: .success(true)),
-    deviceTokenProvider: DeviceTokenProviding = MockDeviceTokenProvider(result: .success("abc")),
+    deviceTokenProvider: DeviceTokenProviding = MockAwaitingDeviceTokenProvider(waitResult: .success("abc")),
     platformProvider: AtlasPlatformProviding = MockPlatformProvider(platform: "ios")
 ) async -> AtlasSDK {
     let sdk = AtlasSDK.shared
@@ -303,14 +249,6 @@ private struct MockPermissionRequester: NotificationPermissionRequesting {
     let result: Result<Bool, Error>
 
     func requestAuthorization() async throws -> Bool {
-        try result.get()
-    }
-}
-
-private struct MockDeviceTokenProvider: DeviceTokenProviding {
-    let result: Result<String, Error>
-
-    func fetchDeviceToken() throws -> String {
         try result.get()
     }
 }

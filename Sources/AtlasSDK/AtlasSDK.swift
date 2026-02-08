@@ -31,25 +31,28 @@ public actor AtlasSDK {
         )
     }
 
+    public func setDeviceAPNSToken(_ tokenData: Data) {
+        AtlasDeviceTokenStore.shared.setDeviceToken(tokenData)
+    }
+
+    public func setDeviceAPNSToken(_ token: String) {
+        AtlasDeviceTokenStore.shared.setDeviceToken(token)
+    }
+
     public func logIn(userID: String) {
         self.userID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public func registerForNotifications() async throws {
-        let auth = try validatedAuth()
-
-        let granted = try await permissionRequester.requestAuthorization()
-        guard granted else {
-            throw AtlasSDKError.permissionDenied
-        }
-
-        let deviceToken = try deviceTokenProvider.fetchDeviceToken()
-        try await registerDeviceToken(deviceToken, auth: auth)
+        try await registerForNotifications(
+            timeout: 30,
+            remoteRegistrar: SystemRemoteNotificationRegistrar()
+        )
     }
 
-    public func registerForNotificationsAutomatically(
-        timeout: TimeInterval = 30,
-        remoteRegistrar: RemoteNotificationRegistering = SystemRemoteNotificationRegistrar()
+    func registerForNotifications(
+        timeout: TimeInterval,
+        remoteRegistrar: RemoteNotificationRegistering
     ) async throws {
         let auth = try validatedAuth()
 
@@ -61,18 +64,6 @@ public actor AtlasSDK {
         try await remoteRegistrar.registerForRemoteNotifications()
         let deviceToken = try await awaitedDeviceToken(timeout: timeout)
         try await registerDeviceToken(deviceToken, auth: auth)
-    }
-
-    public static func didRegisterForRemoteNotifications(deviceToken: Data) {
-        AtlasDeviceTokenStore.shared.setDeviceToken(deviceToken)
-    }
-
-    public static func didRegisterForRemoteNotifications(deviceTokenHex: String) {
-        AtlasDeviceTokenStore.shared.setDeviceToken(deviceTokenHex)
-    }
-
-    public static func didFailToRegisterForRemoteNotifications(error: Error) {
-        _ = error
     }
 
     private func awaitedDeviceToken(timeout: TimeInterval) async throws -> String {
