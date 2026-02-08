@@ -53,3 +53,7 @@ For macOS, wire the equivalent AppKit callback and call the same helper.
 ```bash
 swift test
 ```
+
+## Contributing
+
+This is a public repository with security measures in place for GitHub Actions. See [SECURITY.md](SECURITY.md) for details on our workflow security approach.
