@@ -31,19 +31,15 @@ public actor AtlasSDK {
         )
     }
 
-    public static func logIn(userID: String) async {
-        await shared.logIn(userID: userID)
+    public func logIn(userID: String) {
+        self.userID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    public static func registerForNotifications() async throws {
-        try await shared.registerForNotifications(
+    public func registerForNotifications() async throws {
+        try await registerForNotifications(
             timeout: 30,
             remoteRegistrar: SystemRemoteNotificationRegistrar()
         )
-    }
-
-    func logIn(userID: String) {
-        self.userID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func registerForNotifications(

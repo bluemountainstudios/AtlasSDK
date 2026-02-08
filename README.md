@@ -15,8 +15,8 @@ await AtlasSDK.configure(
     configuration: .init(baseURL: URL(string: "https://your-project-ref.supabase.co")!),
     apiKey: "atlas_pub_..."
 )
-await AtlasSDK.logIn(userID: "user-123")
-try await AtlasSDK.registerForNotifications()
+await AtlasSDK.shared.logIn(userID: "user-123")
+try await AtlasSDK.shared.registerForNotifications()
 ```
 
 `registerForNotifications()` performs the full automatic flow:
