@@ -16,30 +16,39 @@ await AtlasSDK.configure(
     apiKey: "atlas_pub_..."
 )
 await AtlasSDK.shared.logIn(userID: "user-123")
-try await AtlasSDK.shared.registerForNotifications()
+try await AtlasSDK.shared.requestNotificationPermissions()
 ```
 
-`registerForNotifications()` performs the full automatic flow:
+`requestNotificationPermissions()` performs the permissions flow:
 - request notification authorization
 - trigger remote notification registration
-- wait for an APNS device token
-- register the device with Atlas backend
+- wait for an APNS device token from the OS callback
+
+`setDeviceAPNSToken(...)` uploads the user+device token to Atlas backend.
 
 In your app delegate:
 
 ```swift
 func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    AtlasSDK.shared.setDeviceAPNSToken(deviceToken)
+    Task {
+        try await AtlasSDK.shared.setDeviceAPNSToken(deviceToken)
+    }
 }
 ```
 
 Or pass a precomputed hex token string:
 
 ```swift
-AtlasSDK.shared.setDeviceAPNSToken(hexToken)
+try await AtlasSDK.shared.setDeviceAPNSToken(hexToken)
 ```
 
 For macOS, wire the equivalent AppKit callback and call the same helper.
+
+To enable SDK debug logging:
+
+```swift
+AtlasSDK.debugLoggingEnabled = true
+```
 
 ## Testing
 
