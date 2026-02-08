@@ -191,24 +191,24 @@ struct AtlasSDKTests {
         #expect(payload["user_id"] as? String == "new_user")
     }
 
-    @Test("AtlasSDK.setDeviceToken(Data) stores lowercase hex token")
-    func sdkSetDeviceTokenData() throws {
+    @Test("AtlasSDK.setDeviceAPNSToken(Data) stores lowercase hex token")
+    func sdkSetDeviceTokenData() async throws {
         let store = AtlasDeviceTokenStore.shared
         store.clear()
-        AtlasSDK.setDeviceToken(Data([0x0A, 0xBC, 0x01]))
+        await AtlasSDK.shared.setDeviceAPNSToken(Data([0x0A, 0xBC, 0x01]))
         let token = try store.fetchDeviceToken()
         #expect(token == "0abc01")
         store.clear()
     }
 
-    @Test("AtlasSDK.setDeviceToken(String) resumes waiters")
+    @Test("AtlasSDK.setDeviceAPNSToken(String) resumes waiters")
     func sdkSetDeviceTokenStringResumesWaiters() async throws {
         let store = AtlasDeviceTokenStore.shared
         store.clear()
 
         async let awaited: String = store.waitForDeviceToken(timeout: 1)
         try await Task.sleep(nanoseconds: 50_000_000)
-        AtlasSDK.setDeviceToken("from_callback")
+        await AtlasSDK.shared.setDeviceAPNSToken("from_callback")
 
         let token = try await awaited
         #expect(token == "from_callback")

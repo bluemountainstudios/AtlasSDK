@@ -31,11 +31,11 @@ public actor AtlasSDK {
         )
     }
 
-    public func setDeviceToken(_ tokenData: Data) {
+    public func setDeviceAPNSToken(_ tokenData: Data) {
         AtlasDeviceTokenStore.shared.setDeviceToken(tokenData)
     }
 
-    public func setDeviceToken(_ token: String) {
+    public func setDeviceAPNSToken(_ token: String) {
         AtlasDeviceTokenStore.shared.setDeviceToken(token)
     }
 

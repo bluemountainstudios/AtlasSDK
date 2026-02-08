@@ -29,14 +29,14 @@ In your app delegate:
 
 ```swift
 func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    AtlasSDK.setDeviceToken(deviceToken)
+    AtlasSDK.shared.setDeviceAPNSToken(deviceToken)
 }
 ```
 
 Or pass a precomputed hex token string:
 
 ```swift
-AtlasSDK.setDeviceToken(hexToken)
+AtlasSDK.shared.setDeviceAPNSToken(hexToken)
 ```
 
 For macOS, wire the equivalent AppKit callback and call the same helper.
