@@ -20,23 +20,33 @@ jobs:
 
       - name: Compute next patch version
         id: version
-        shell: bash
-        run: |
-          set -euo pipefail
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let latestTag = '';
+            try {
+              const response = await github.rest.repos.getLatestRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              });
+              latestTag = response.data.tag_name || '';
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
 
-          latest_tag=$(git tag --list 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
+            let nextTag = 'v0.0.1';
+            const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(latestTag);
+            if (match) {
+              const major = Number(match[1]);
+              const minor = Number(match[2]);
+              const patch = Number(match[3]);
+              nextTag = `v${major}.${minor}.${patch + 1}`;
+            }
 
-          if [[ -z "${latest_tag}" ]]; then
-            next_tag="v0.0.1"
-          else
-            ver="${latest_tag#v}"
-            IFS='.' read -r major minor patch <<<"${ver}"
-            next_patch=$((patch + 1))
-            next_tag="v${major}.${minor}.${next_patch}"
-          fi
-
-          echo "latest_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
-          echo "next_tag=${next_tag}" >> "$GITHUB_OUTPUT"
+            core.setOutput('latest_tag', latestTag);
+            core.setOutput('next_tag', nextTag);
 
       - name: Create and push tag
         env:
