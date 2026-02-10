@@ -44,6 +44,49 @@ public actor AtlasSDK {
         try await registerDeviceToken(token, auth: auth)
     }
 
+    public func acknowledgePushNotification(withID id: String) async throws {
+        let config = try validatedConfig()
+        let notificationID = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !notificationID.isEmpty else {
+            throw AtlasSDKError.invalidArgument("notification_id is required.")
+        }
+
+        let endpoint = config.configuration.baseURL
+            .appendingPathComponent("functions")
+            .appendingPathComponent("v1")
+            .appendingPathComponent("acknowledge-notification")
+        debugLog("POST \(endpoint.absoluteString)")
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload = AcknowledgeNotificationPayload(
+            apiKey: config.apiKey,
+            notificationID: notificationID
+        )
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await networkClient.send(request)
+        } catch {
+            debugLog("Network request failed: \(error)")
+            throw error
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AtlasSDKError.invalidResponse
+        }
+        let responseBody = String(data: data, encoding: .utf8) ?? ""
+        debugLog("Response status: \(httpResponse.statusCode), body: \(responseBody)")
+
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw AtlasSDKError.requestFailed(statusCode: httpResponse.statusCode, body: responseBody)
+        }
+    }
+
     public func logIn(userID: String) {
         self.userID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -94,6 +137,18 @@ public actor AtlasSDK {
         }
 
         return (configuration, apiKey, userID)
+    }
+
+    private func validatedConfig() throws -> (configuration: AtlasSDKConfiguration, apiKey: String) {
+        guard let configuration else {
+            throw AtlasSDKError.notConfigured
+        }
+
+        guard let apiKey, !apiKey.isEmpty else {
+            throw AtlasSDKError.notConfigured
+        }
+
+        return (configuration, apiKey)
     }
 
     private func registerDeviceToken(
@@ -184,5 +239,15 @@ private struct RegisterDevicePayload: Codable {
         case userID = "user_id"
         case deviceToken = "device_token"
         case platform
+    }
+}
+
+private struct AcknowledgeNotificationPayload: Codable {
+    let apiKey: String
+    let notificationID: String
+
+    enum CodingKeys: String, CodingKey {
+        case apiKey = "api_key"
+        case notificationID = "notification_id"
     }
 }

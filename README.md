@@ -36,6 +36,27 @@ func application(_ application: UIApplication, didRegisterForRemoteNotifications
 }
 ```
 
+When you receive a push notification, Atlas includes a `notification_id` in the APNS payload. You can acknowledge it back to Atlas:
+
+```swift
+func application(
+    _ application: UIApplication,
+    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+) {
+    if let id = userInfo["notification_id"] as? String {
+        Task {
+            do {
+                try await AtlasSDK.shared.acknowledgePushNotification(withID: id)
+            } catch {
+                // Optional: handle/log errors
+            }
+        }
+    }
+    completionHandler(.noData)
+}
+```
+
 Or pass a precomputed hex token string:
 
 ```swift
