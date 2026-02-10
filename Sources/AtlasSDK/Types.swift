@@ -19,6 +19,7 @@ public enum AtlasSDKError: Error, Equatable {
     case missingDeviceToken
     case deviceTokenTimeout
     case unsupportedPlatform
+    case invalidArgument(String)
     case requestFailed(statusCode: Int, body: String)
 }
 

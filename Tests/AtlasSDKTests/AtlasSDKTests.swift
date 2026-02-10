@@ -106,12 +106,12 @@ struct AtlasSDKTests {
         #expect(request.httpMethod == "POST")
         #expect(request.url?.absoluteString == "https://example.supabase.co/functions/v1/register-device")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(request.value(forHTTPHeaderField: "X-API-Key") == "atlas_pub_key")
 
         let bodyData = try #require(request.httpBody)
         let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
         let payload = try #require(json)
 
-        #expect(payload["api_key"] as? String == "atlas_pub_key")
         #expect(payload["user_id"] as? String == "user_123")
         #expect(payload["device_token"] as? String == "device_token_123")
         #expect(payload["platform"] as? String == "macos")
@@ -203,11 +203,11 @@ struct AtlasSDKTests {
 
         #expect(firstNetwork.requests.isEmpty)
         let request = try #require(secondNetwork.requests.first)
+        #expect(request.value(forHTTPHeaderField: "X-API-Key") == "new_key")
         let bodyData = try #require(request.httpBody)
         let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
         let payload = try #require(json)
 
-        #expect(payload["api_key"] as? String == "new_key")
         #expect(payload["user_id"] as? String == "new_user")
     }
 
@@ -256,6 +256,74 @@ struct AtlasSDKTests {
         let token = try await awaited
         #expect(token == "from_callback")
         store.clear()
+    }
+
+    @Test("acknowledgePushNotification fails when configure was not called")
+    func acknowledgeFailsWithoutConfigure() async throws {
+        let sdk = AtlasSDK.shared
+        await sdk.resetForTesting()
+
+        await #expect(throws: AtlasSDKError.notConfigured) {
+            try await sdk.acknowledgePushNotification(withID: "00000000-0000-0000-0000-000000000000")
+        }
+    }
+
+    @Test("acknowledgePushNotification fails when notification id is empty")
+    func acknowledgeFailsWithEmptyID() async throws {
+        let network = MockNetworkClient()
+        let sdk = await configuredSDK(network: network)
+
+        await #expect(throws: AtlasSDKError.invalidArgument("notification_id is required.")) {
+            try await sdk.acknowledgePushNotification(withID: "   ")
+        }
+        #expect(network.requests.isEmpty)
+    }
+
+    @Test("acknowledgePushNotification posts expected payload on success without requiring logIn")
+    func acknowledgeSuccess() async throws {
+        let network = MockNetworkClient()
+        network.nextResult = .success((
+            Data("{\"ok\":true,\"acknowledged\":true}".utf8),
+            HTTPURLResponse(url: URL(string: "https://example.supabase.co")!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+        ))
+
+        let sdk = await configuredSDK(network: network)
+
+        try await sdk.acknowledgePushNotification(withID: "00000000-0000-0000-0000-000000000000")
+
+        #expect(network.requests.count == 1)
+        let request = try #require(network.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.absoluteString == "https://example.supabase.co/functions/v1/acknowledge-notification")
+        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(request.value(forHTTPHeaderField: "X-API-Key") == "atlas_pub_key")
+
+        let bodyData = try #require(request.httpBody)
+        let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        let payload = try #require(json)
+
+        #expect(payload["notification_id"] as? String == "00000000-0000-0000-0000-000000000000")
+    }
+
+    @Test("acknowledgePushNotification surfaces backend status/body failures")
+    func acknowledgeFailsOnBackendError() async throws {
+        let network = MockNetworkClient()
+        network.nextResult = .success((
+            Data("{\"error\":\"not_found\"}".utf8),
+            HTTPURLResponse(url: URL(string: "https://example.supabase.co")!, statusCode: 404, httpVersion: nil, headerFields: nil)!
+        ))
+
+        let sdk = await configuredSDK(network: network)
+
+        do {
+            try await sdk.acknowledgePushNotification(withID: "00000000-0000-0000-0000-000000000000")
+            Issue.record("Expected requestFailed but succeeded.")
+        } catch let AtlasSDKError.requestFailed(statusCode, body) {
+            #expect(statusCode == 404)
+            #expect(body.contains("not_found"))
+        } catch {
+            Issue.record("Expected requestFailed, got \(error).")
+        }
     }
 }
 
