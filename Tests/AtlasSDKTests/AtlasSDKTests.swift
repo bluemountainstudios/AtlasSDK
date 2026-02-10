@@ -106,12 +106,12 @@ struct AtlasSDKTests {
         #expect(request.httpMethod == "POST")
         #expect(request.url?.absoluteString == "https://example.supabase.co/functions/v1/register-device")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(request.value(forHTTPHeaderField: "X-API-Key") == "atlas_pub_key")
 
         let bodyData = try #require(request.httpBody)
         let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
         let payload = try #require(json)
 
-        #expect(payload["api_key"] as? String == "atlas_pub_key")
         #expect(payload["user_id"] as? String == "user_123")
         #expect(payload["device_token"] as? String == "device_token_123")
         #expect(payload["platform"] as? String == "macos")
@@ -203,11 +203,11 @@ struct AtlasSDKTests {
 
         #expect(firstNetwork.requests.isEmpty)
         let request = try #require(secondNetwork.requests.first)
+        #expect(request.value(forHTTPHeaderField: "X-API-Key") == "new_key")
         let bodyData = try #require(request.httpBody)
         let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
         let payload = try #require(json)
 
-        #expect(payload["api_key"] as? String == "new_key")
         #expect(payload["user_id"] as? String == "new_user")
     }
 
@@ -296,12 +296,12 @@ struct AtlasSDKTests {
         #expect(request.httpMethod == "POST")
         #expect(request.url?.absoluteString == "https://example.supabase.co/functions/v1/acknowledge-notification")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(request.value(forHTTPHeaderField: "X-API-Key") == "atlas_pub_key")
 
         let bodyData = try #require(request.httpBody)
         let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
         let payload = try #require(json)
 
-        #expect(payload["api_key"] as? String == "atlas_pub_key")
         #expect(payload["notification_id"] as? String == "00000000-0000-0000-0000-000000000000")
     }
 

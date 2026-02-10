@@ -60,9 +60,9 @@ public actor AtlasSDK {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(config.apiKey, forHTTPHeaderField: "X-API-Key")
 
         let payload = AcknowledgeNotificationPayload(
-            apiKey: config.apiKey,
             notificationID: notificationID
         )
         request.httpBody = try JSONEncoder().encode(payload)
@@ -165,9 +165,9 @@ public actor AtlasSDK {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(auth.apiKey, forHTTPHeaderField: "X-API-Key")
 
         let payload = RegisterDevicePayload(
-            apiKey: auth.apiKey,
             userID: auth.userID,
             deviceToken: deviceToken,
             platform: platformProvider.platform
@@ -229,13 +229,11 @@ extension AtlasSDK {
 }
 
 private struct RegisterDevicePayload: Codable {
-    let apiKey: String
     let userID: String
     let deviceToken: String
     let platform: String
 
     enum CodingKeys: String, CodingKey {
-        case apiKey = "api_key"
         case userID = "user_id"
         case deviceToken = "device_token"
         case platform
@@ -243,11 +241,9 @@ private struct RegisterDevicePayload: Codable {
 }
 
 private struct AcknowledgeNotificationPayload: Codable {
-    let apiKey: String
     let notificationID: String
 
     enum CodingKeys: String, CodingKey {
-        case apiKey = "api_key"
         case notificationID = "notification_id"
     }
 }

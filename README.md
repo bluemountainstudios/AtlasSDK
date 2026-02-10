@@ -57,6 +57,8 @@ func application(
 }
 ```
 
+Note: Atlas public API key is sent in the `X-API-Key` header for all public endpoints (for example `register-device`, `acknowledge-notification`).
+
 Or pass a precomputed hex token string:
 
 ```swift
