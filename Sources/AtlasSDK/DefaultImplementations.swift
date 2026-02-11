@@ -50,6 +50,25 @@ public struct SystemPlatformProvider: AtlasPlatformProviding {
     }
 }
 
+struct SystemLocaleProvider: AtlasLocaleProviding {
+    init() {}
+
+    var languageCodeISO639_2: String {
+        // Prefer modern Foundation API. Fall back to english if unavailable/unrecognized.
+        if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+            let code = (Locale.current.language.languageCode?.identifier(.alpha3).map { "\($0)" } ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            if code.range(of: #"^[a-z]{3}$"#, options: .regularExpression) != nil {
+                return code
+            }
+            return "eng"
+        } else {
+            return "eng"
+        }
+    }
+}
+
 public struct SystemRemoteNotificationRegistrar: RemoteNotificationRegistering {
     public init() {}
 

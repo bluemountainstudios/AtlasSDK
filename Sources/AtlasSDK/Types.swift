@@ -43,6 +43,10 @@ public protocol AtlasPlatformProviding: Sendable {
     var platform: String { get }
 }
 
+protocol AtlasLocaleProviding: Sendable {
+    var languageCodeISO639_2: String { get }
+}
+
 public protocol RemoteNotificationRegistering: Sendable {
     func registerForRemoteNotifications() async throws
 }
