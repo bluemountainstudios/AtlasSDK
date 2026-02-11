@@ -12,6 +12,7 @@ public actor AtlasSDK {
     private var permissionRequester: NotificationPermissionRequesting = UserNotificationPermissionRequester()
     private var deviceTokenProvider: DeviceTokenProviding = AtlasDeviceTokenStore.shared
     private var platformProvider: AtlasPlatformProviding = SystemPlatformProvider()
+    private var languageProvider: AtlasLanguageProviding = SystemLanguageProvider()
 
     private var apiKey: String?
     private var userID: String?
@@ -28,7 +29,8 @@ public actor AtlasSDK {
             networkClient: URLSessionNetworkClient(),
             permissionRequester: UserNotificationPermissionRequester(),
             deviceTokenProvider: AtlasDeviceTokenStore.shared,
-            platformProvider: SystemPlatformProvider()
+            platformProvider: SystemPlatformProvider(),
+            languageProvider: SystemLanguageProvider()
         )
     }
 
@@ -170,7 +172,8 @@ public actor AtlasSDK {
         let payload = RegisterDevicePayload(
             userID: auth.userID,
             deviceToken: deviceToken,
-            platform: platformProvider.platform
+            platform: platformProvider.platform,
+            language: languageProvider.languageCodeISO639_2
         )
         request.httpBody = try JSONEncoder().encode(payload)
 
@@ -207,7 +210,8 @@ extension AtlasSDK {
         networkClient: AtlasNetworkClient,
         permissionRequester: NotificationPermissionRequesting,
         deviceTokenProvider: DeviceTokenProviding,
-        platformProvider: AtlasPlatformProviding
+        platformProvider: AtlasPlatformProviding,
+        languageProvider: AtlasLanguageProviding
     ) {
         self.configuration = configuration
         self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -215,6 +219,7 @@ extension AtlasSDK {
         self.permissionRequester = permissionRequester
         self.deviceTokenProvider = deviceTokenProvider
         self.platformProvider = platformProvider
+        self.languageProvider = languageProvider
     }
 
     internal func resetForTesting() {
@@ -223,6 +228,7 @@ extension AtlasSDK {
         permissionRequester = UserNotificationPermissionRequester()
         deviceTokenProvider = AtlasDeviceTokenStore.shared
         platformProvider = SystemPlatformProvider()
+        languageProvider = SystemLanguageProvider()
         apiKey = nil
         userID = nil
     }
@@ -232,11 +238,13 @@ private struct RegisterDevicePayload: Codable {
     let userID: String
     let deviceToken: String
     let platform: String
+    let language: String
 
     enum CodingKeys: String, CodingKey {
         case userID = "user_id"
         case deviceToken = "device_token"
         case platform
+        case language
     }
 }
 

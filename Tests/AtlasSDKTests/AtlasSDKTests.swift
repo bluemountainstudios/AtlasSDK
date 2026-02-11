@@ -74,7 +74,8 @@ struct AtlasSDKTests {
         let sdk = await configuredSDK(
             network: network,
             deviceTokenProvider: tokenProvider,
-            platformProvider: MockPlatformProvider(platform: "macos")
+            platformProvider: MockPlatformProvider(platform: "macos"),
+            languageProvider: MockLanguageProvider(languageCodeISO639_2: "eng")
         )
         await sdk.logIn(userID: "user_123")
 
@@ -95,7 +96,8 @@ struct AtlasSDKTests {
 
         let sdk = await configuredSDK(
             network: network,
-            platformProvider: MockPlatformProvider(platform: "macos")
+            platformProvider: MockPlatformProvider(platform: "macos"),
+            languageProvider: MockLanguageProvider(languageCodeISO639_2: "eng")
         )
         await sdk.logIn(userID: "user_123")
 
@@ -115,6 +117,7 @@ struct AtlasSDKTests {
         #expect(payload["user_id"] as? String == "user_123")
         #expect(payload["device_token"] as? String == "device_token_123")
         #expect(payload["platform"] as? String == "macos")
+        #expect(payload["language"] as? String == "eng")
     }
 
     @Test("setDeviceAPNSToken(String) fails when logIn was not called")
@@ -185,7 +188,8 @@ struct AtlasSDKTests {
             networkClient: firstNetwork,
             permissionRequester: MockPermissionRequester(result: .success(true)),
             deviceTokenProvider: MockAwaitingDeviceTokenProvider(waitResult: .success("token")),
-            platformProvider: MockPlatformProvider(platform: "ios")
+            platformProvider: MockPlatformProvider(platform: "ios"),
+            languageProvider: MockLanguageProvider(languageCodeISO639_2: "eng")
         )
         await sdk.logIn(userID: "old_user")
 
@@ -195,7 +199,8 @@ struct AtlasSDKTests {
             networkClient: secondNetwork,
             permissionRequester: MockPermissionRequester(result: .success(true)),
             deviceTokenProvider: MockAwaitingDeviceTokenProvider(waitResult: .success("token")),
-            platformProvider: MockPlatformProvider(platform: "ios")
+            platformProvider: MockPlatformProvider(platform: "ios"),
+            languageProvider: MockLanguageProvider(languageCodeISO639_2: "eng")
         )
         await sdk.logIn(userID: "new_user")
 
@@ -331,7 +336,8 @@ private func configuredSDK(
     network: MockNetworkClient,
     permissionRequester: MockPermissionRequester = MockPermissionRequester(result: .success(true)),
     deviceTokenProvider: DeviceTokenProviding = MockAwaitingDeviceTokenProvider(waitResult: .success("abc")),
-    platformProvider: AtlasPlatformProviding = MockPlatformProvider(platform: "ios")
+    platformProvider: AtlasPlatformProviding = MockPlatformProvider(platform: "ios"),
+    languageProvider: AtlasLanguageProviding = MockLanguageProvider(languageCodeISO639_2: "eng")
 ) async -> AtlasSDK {
     let sdk = AtlasSDK.shared
     await sdk.resetForTesting()
@@ -341,7 +347,8 @@ private func configuredSDK(
         networkClient: network,
         permissionRequester: permissionRequester,
         deviceTokenProvider: deviceTokenProvider,
-        platformProvider: platformProvider
+        platformProvider: platformProvider,
+        languageProvider: languageProvider
     )
     return sdk
 }
@@ -398,6 +405,10 @@ private final class MockRemoteNotificationRegistrar: RemoteNotificationRegisteri
 
 private struct MockPlatformProvider: AtlasPlatformProviding {
     let platform: String
+}
+
+private struct MockLanguageProvider: AtlasLanguageProviding {
+    let languageCodeISO639_2: String
 }
 
 private enum MockError: Error {
