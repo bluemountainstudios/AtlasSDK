@@ -50,7 +50,7 @@ public struct SystemPlatformProvider: AtlasPlatformProviding {
     }
 }
 
-struct SystemLocaleProvider: AtlasLocaleProviding {
+struct SystemLanguageProvider: AtlasLanguageProviding {
     init() {}
 
     var languageCodeISO639_2: String {

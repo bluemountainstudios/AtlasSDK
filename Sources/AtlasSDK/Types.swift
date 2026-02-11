@@ -43,7 +43,7 @@ public protocol AtlasPlatformProviding: Sendable {
     var platform: String { get }
 }
 
-protocol AtlasLocaleProviding: Sendable {
+protocol AtlasLanguageProviding: Sendable {
     var languageCodeISO639_2: String { get }
 }
 
