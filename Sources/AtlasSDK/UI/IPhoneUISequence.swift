@@ -68,6 +68,12 @@ public struct IPhoneUISequence: View {
     let tint: Color = Color.accentColor
     let items: [Config]
     
+    public init(items: [Config]) {
+        self.items = items
+        self.currentIndex = currentIndex
+        self.screenshotSize = screenshotSize
+    }
+    
     @State private var currentIndex = 0
     @State private var screenshotSize: CGSize = .zero
     
